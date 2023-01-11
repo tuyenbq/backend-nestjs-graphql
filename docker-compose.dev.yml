@@ -1,0 +1,66 @@
+version: '3.7'
+
+# This Guideline will show you how to config env
+# https://medium.com/better-programming/using-variables-in-docker-compose-265a604c2006
+
+services:
+  app:
+    image: graphql-template-local
+    build:
+      context: .
+      # Just build image `builder`. For detail, please see file `./Dockerfile`
+      target: builder
+    env_file: .env
+    environment:
+      APP_PORT: $APP_PORT
+      NODE_ENV: $NODE_ENV
+      RDS_USERNAME: $RDS_USERNAME
+      RDS_PASSWORD: $RDS_PASSWORD
+      RDS_DATABASE: $RDS_DATABASE
+      RDS_HOST: $RDS_HOST
+      JWT_SECRET_KEY: $JWT_SECRET_KEY
+      JWT_EXPIRE_TIME: $JWT_EXPIRE_TIME
+      JWT_SECRET_REFRESH_KEY: $JWT_SECRET_REFRESH_KEY
+      JWT_REFRESH_EXPIRE_TIME: $JWT_REFRESH_EXPIRE_TIME
+      
+    ports:
+      - 80:$APP_PORT
+    volumes:
+      # Share directory `src` to container. This help you can auto reload server if any file in
+      # directory change.
+      - ./src:/builder/app/src/
+      # Create volume to cache directory module. This useful for help build image fast more.
+      - /builder/app/node_modules/
+    # Start source with nodemon. For detail, read file package.json.
+    command: yarn run start:dev
+    networks:
+      - nw_template_rest
+    # depends_on:
+    #   - db
+    # - redis
+
+  # db:
+  #   build: ./docker/mysql/
+  #   image: mysql-graphql-local
+  #   env_file: .env
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: admin@123
+  #     MYSQL_DATABASE: $RDS_DATABASE
+  #     MYSQL_USER: $RDS_USERNAME
+  #     MYSQL_PASSWORD: $RDS_PASSWORD
+  #   ports:
+  #     - 3306:3306
+  #   networks:
+  #     - nw_template_rest
+    # volumes:
+    #   - ./mysql:/var/lib/mysql
+
+  # redis:
+  #   image: redis
+  #   ports:
+  #     - 6379:6379
+networks:
+  nw_template_rest:
+    driver: bridge
+volumes:
+  node_modules_cache:

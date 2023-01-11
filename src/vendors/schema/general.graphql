@@ -1,0 +1,28 @@
+scalar JSON
+scalar Date
+
+type Error {
+  errorCode: String!
+  message: String
+  details: [ErrorDetail]!
+}
+
+type ErrorDetail {
+  message: String
+  type: String
+  key: String
+  value: String
+}
+
+type PagerInformation {
+  pageTotal: Int
+  totalCount: Int
+  currentPage: Int
+  pageSize: Int
+}
+
+type MutationResponse {
+  statusCode: Int!
+  data: String
+  error: Error
+}

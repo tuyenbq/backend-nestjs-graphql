@@ -1,0 +1,59 @@
+type Query {
+  login(input: LoginInput!): LoginResponse
+  logout: LogoutResponse
+  refreshToken(refreshToken: String): RefreshTokenQueryResponse
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+  grantType: String
+}
+
+input AddUserInput {
+  email: String!
+  password: String!
+}
+
+type LoginResponse {
+  statusCode: Int!
+  data: Login
+  error: Error
+}
+type Login {
+  accessToken: AccessToken!
+  refreshToken: RefreshToken!
+  tokenType: String!
+}
+
+type RefreshTokenQueryResponse {
+  statusCode: Int
+  message: String
+  data: AccessToken
+  error: Error
+}
+
+type Mutation {
+  addUser(input: AddUserInput!): MutationResponse
+}
+
+type AccessToken {
+  accessToken: String
+  expiredAt: Int
+}
+
+type RefreshToken {
+  refreshToken: String
+  expiredAt: Int
+}
+
+type LogoutResponse {
+  statusCode: Int
+  message: String
+  error: Error
+  data: Logout
+}
+
+type Logout {
+  userId: Int
+}

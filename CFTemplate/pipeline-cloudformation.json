@@ -1,0 +1,338 @@
+{
+    "Parameters": {
+        "Environment": {
+            "Description": "(*) Format: dev/test/${staging/prod}-${countryCode}",
+            "Type": "String",
+            "ConstraintDescription": "must select a valid environment.",
+            "Default": "dev"
+        },
+        "BranchName": {
+            "Description": "(*) GitHub branch name.",
+            "Type": "String",
+            "Default": "develop"
+        },
+        "BackendRepositoryName": {
+            "Description": "(*) GitHub backend repository name.",
+            "Type": "String",
+            "Default": "backend-nestjs-graphql"
+        },
+        "GitHubOwner": {
+            "Description": "(*) GitHub Owner.",
+            "Type": "String",
+            "Default": "vfa-khanhvq",
+            "NoEcho": "true"
+        },
+        "OAuthToken": {
+            "Description": "(*) GitHub OAuthToken.",
+            "Type": "String",
+            "NoEcho": "true",
+            "Default": "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"
+        },
+        "DockerHubUsername": {
+            "Description": "DockerHub Username.",
+            "Type": "String",
+            "Default": "khanhvu94",
+            "NoEcho": "true"
+        },
+        "DockerHubPassword": {
+            "Description": "DockerHub Password.",
+            "Type": "String",
+            "Default": "anhkhanh1",
+            "NoEcho": "true"
+        },
+        "EcsClusterName": {
+            "Description": "(*) Specifies the ECS Cluster Name with which the resources would be associated.\nFormat: healthgiftproduction-${countryCode}.",
+            "Type": "String",
+            "Default": "connect"
+        }
+    },
+    "Resources": {
+        "CodeBuildRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [{
+                        "Action": ["sts:AssumeRole"],
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": ["codebuild.amazonaws.com"]
+                        }
+                    }],
+                    "Version": "2012-10-17"
+                },
+                "Path": "/",
+                "Policies": [{
+                    "PolicyName": "CodeBuildAccess",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                            "Action": [
+                                "logs:*",
+                                "ec2:CreateNetworkInterface",
+                                "ec2:DescribeNetworkInterfaces",
+                                "ec2:DeleteNetworkInterface",
+                                "ec2:DescribeSubnets",
+                                "ec2:DescribeSecurityGroups",
+                                "ec2:DescribeDhcpOptions",
+                                "ec2:DescribeVpcs",
+                                "ec2:CreateNetworkInterfacePermission",
+                                "s3:*",
+                                "ecr:*"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": "*"
+                        }]
+                    }
+                }]
+            }
+        },
+        "BackendRepository": {
+            "Type": "AWS::ECR::Repository",
+            "Properties": {
+                "RepositoryName": {
+                    "Fn::Sub": "connect-backend-${Environment}"
+                },
+                "LifecyclePolicy": {
+                    "LifecyclePolicyText": "{\n \"rules\": [\n    {\n      \"rulePriority\": 1,\n      \"description\": \"remove old images\",\n      \"selection\": {\n        \"tagStatus\": \"any\",\n        \"countType\": \"imageCountMoreThan\",\n        \"countNumber\": 10\n      },\n      \"action\": {\n        \"type\": \"expire\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "BackendCodeBuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "connect-backend-${Environment}"
+                },
+                "ServiceRole": {
+                    "Ref": "CodeBuildRole"
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Cache": {
+                    "Type": "LOCAL",
+                    "Modes": ["LOCAL_DOCKER_LAYER_CACHE"]
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "GroupName": "CodeBuild",
+                        "Status": "ENABLED",
+                        "StreamName": {
+                            "Fn::Sub": "connect-backend-${Environment}"
+                        }
+                    }
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:4.0",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "PrivilegedMode": true,
+                    "EnvironmentVariables": [{
+                            "Name": "IMAGE_REPO_NAME",
+                            "Value": {
+                                "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/connect-backend-${Environment}"
+                            }
+                        },
+                        {
+                            "Name": "DOCKERHUB_PASSWORD",
+                            "Value": {
+                                "Ref": "DockerHubPassword"
+                            }
+                        },
+                        {
+                            "Name": "DOCKERHUB_USERNAME",
+                            "Value": {
+                                "Ref": "DockerHubUsername"
+                            }
+                        },
+                        {
+                            "Name": "IMAGE_TAG",
+                            "Value": "latest"
+                        },
+                        {
+                            "Name": "AWS_DEFAULT_REGION",
+                            "Value": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE"
+                }
+            }
+        },
+        "BackendCodepipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "CodePipelineArtifactStoreBucket"
+                    }
+                },
+                "Name": {
+                    "Fn::Sub": "connect-backend-${Environment}"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": ["CodePipelineServiceRole", "Arn"]
+                },
+                "Stages": [{
+                        "Name": "Source",
+                        "Actions": [{
+                            "Name": "Source",
+                            "ActionTypeId": {
+                                "Category": "Source",
+                                "Owner": "ThirdParty",
+                                "Version": 1,
+                                "Provider": "GitHub"
+                            },
+                            "OutputArtifacts": [{
+                                "Name": "SourceOutput"
+                            }],
+                            "Configuration": {
+                                "Owner": {
+                                    "Ref": "GitHubOwner"
+                                },
+                                "Repo": {
+                                    "Ref": "BackendRepositoryName"
+                                },
+                                "Branch": {
+                                    "Ref": "BranchName"
+                                },
+                                "OAuthToken": {
+                                    "Ref": "OAuthToken"
+                                },
+                                "PollForSourceChanges": true
+                            },
+                            "RunOrder": 1
+                        }]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [{
+                            "Name": "Build",
+                            "ActionTypeId": {
+                                "Category": "Build",
+                                "Owner": "AWS",
+                                "Provider": "CodeBuild",
+                                "Version": "1"
+                            },
+                            "RunOrder": 1,
+                            "Configuration": {
+                                "ProjectName": {
+                                    "Fn::Sub": "connect-backend-${Environment}"
+                                }
+                            },
+                            "OutputArtifacts": [{
+                                "Name": "BuildOutput"
+                            }],
+                            "InputArtifacts": [{
+                                "Name": "SourceOutput"
+                            }]
+                        }]
+                    },
+                    {
+                        "Name": "Deploy",
+                        "Actions": [{
+                            "Name": "Deploy",
+                            "ActionTypeId": {
+                                "Category": "Deploy",
+                                "Owner": "AWS",
+                                "Provider": "ECS",
+                                "Version": "1"
+                            },
+                            "RunOrder": 1,
+                            "Configuration": {
+                                "ClusterName": {
+                                    "Fn::Sub": "${EcsClusterName}-${Environment}"
+                                },
+                                "ServiceName": {
+                                    "Fn::Sub": "connect-backend-service-${Environment}"
+                                },
+                                "FileName": "imagedefinitions.json"
+                            },
+                            "OutputArtifacts": [],
+                            "InputArtifacts": [{
+                                "Name": "BuildOutput"
+                            }]
+                        }]
+                    }
+                ]
+            }
+        },
+        "CodePipelineServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": ["codepipeline.amazonaws.com", "cloudformation.amazonaws.com"]
+                        },
+                        "Action": "sts:AssumeRole"
+                    }]
+                },
+                "Path": "/",
+                "Policies": [{
+                    "PolicyName": "AWS-CodePipeline-Service-3",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                                "Effect": "Allow",
+                                "Action": [
+                                    "codebuild:BatchGetBuilds",
+                                    "codebuild:StartBuild"
+                                ],
+                                "Resource": "*"
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "iam:PassRole",
+                                    "iam:CreateRole",
+                                    "iam:AttachRolePolicy",
+                                    "iam:DetachRolePolicy"
+                                ],
+                                "Resource": "*"
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": ["iam:GetRole"],
+                                "Resource": "arn:aws:iam::*:role/lambda-execution-role*"
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "elasticbeanstalk:*",
+                                    "ec2:*",
+                                    "elasticloadbalancing:*",
+                                    "autoscaling:*",
+                                    "cloudwatch:*",
+                                    "s3:*",
+                                    "sns:*",
+                                    "cloudformation:*",
+                                    "rds:*",
+                                    "sqs:*",
+                                    "ecs:*",
+                                    "lambda:*",
+                                    "events:*"
+                                ],
+                                "Resource": "*"
+                            }
+                        ]
+                    }
+                }]
+            }
+        },
+        "CodePipelineArtifactStoreBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "pipeline-artifac-backend-store-bucket-${Environment}"
+                }
+            }
+        }
+    }
+}
