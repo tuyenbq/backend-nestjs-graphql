@@ -7,8 +7,8 @@ const pathEnv =
 // eslint-disable-next-line
 require('dotenv').config({ debug: process.env.APP_DEBUG, path: pathEnv });
 const dbConfig: TypeOrmModuleOptions = {
-  type: process.env.RDS_TYPE === 'mysql' ? 'mysql' : 'mssql',
-  port: Number(process.env.RDS_PORT) || 3306,
+  type: 'mssql',
+  port: Number(process.env.RDS_PORT) || 1433,
   host: '35.223.33.250',
   username: 'sqlserver',
   password: 'd#r;C_lv&}[M-zL|',
